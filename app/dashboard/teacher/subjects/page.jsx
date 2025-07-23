@@ -14,21 +14,49 @@ export default function MySubjects() {
 
   useEffect(() => {
     const fetchSubjects = async () => {
+      setLoading(true);
       try {
         const res = await fetch("/api/teacher/subjects");
+        if (!res.ok) throw new Error("Failed to fetch subjects");
+
         const data = await res.json();
 
-        // Optional: Add dummy data like recent activity if needed
-        const enriched = data.map((subj) => ({
-          ...subj,
-          progress: Math.floor(Math.random() * 40) + 60, // mock progress
-          recent: ["New lesson uploaded", "Assignment due soon"], // mock recent activity
-          students: subj.studentCount || 0, // from enriched backend if available
-        }));
+        // Enrich each subject with student count
+        const enriched = await Promise.all(
+          data.map(async (subject) => {
+            if (!subject.name) return { ...subject, students: 0 };
+
+            try {
+              const encodedName = encodeURIComponent(subject.name);
+              const res = await fetch(
+                `/api/teacher/subjects/${encodedName}/students`
+              );
+              const result = await res.json();
+
+              return {
+                ...subject,
+                students: result.students?.length || 0,
+                progress: Math.floor(Math.random() * 40) + 60,
+                recent: ["New lesson uploaded", "Assignment due soon"],
+              };
+            } catch (err) {
+              console.error(
+                `Failed to fetch students for ${subject.name}`,
+                err
+              );
+              return {
+                ...subject,
+                students: 0,
+                progress: Math.floor(Math.random() * 40) + 60,
+                recent: ["New lesson uploaded", "Assignment due soon"],
+              };
+            }
+          })
+        );
 
         setSubjects(enriched);
       } catch (err) {
-        console.error("Failed to fetch subjects", err);
+        console.error("Error fetching subjects:", err);
       } finally {
         setLoading(false);
       }
@@ -119,7 +147,10 @@ export default function MySubjects() {
 
               {/* Actions */}
               <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+                <button
+                  onClick={() => router.push(`/dashboard/teacher/students`)}
+                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
                   View Students
                 </button>
                 <button className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700">
